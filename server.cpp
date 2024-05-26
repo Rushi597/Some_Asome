@@ -1,12 +1,18 @@
 #include "server.h"
-#include <algorithm> // for std::remove
-#include <cstring>   // for strerror
-#include <cerrno>    // for errno
+#include <algorithm>
+#include <cstring>
+#include <cerrno>
 
-std::vector<int> clients;
-std::map<int, std::string> client_names;
-std::mutex mtx;
+std::vector<int> clients; ///< Vector to store client sockets
+std::map<int, std::string> client_names; ///< Map to store client names indexed by their socket
+std::mutex mtx; ///< Mutex to synchronize access to shared resources
 
+/**
+ * @brief Broadcasts a message to all connected clients except the sender.
+ *
+ * @param message The message to broadcast.
+ * @param sender_socket The socket of the sender.
+ */
 void broadcastMessage(const std::string& message, int sender_socket) {
     std::lock_guard<std::mutex> lock(mtx);
     for (int client_socket : clients) {
@@ -16,11 +22,15 @@ void broadcastMessage(const std::string& message, int sender_socket) {
     }
 }
 
+/**
+ * @brief Handles communication with a connected client.
+ *
+ * @param client_socket The socket of the connected client.
+ */
 void handleClient(int client_socket) {
     char buffer[1024];
     int valread;
 
-    // Initial message to set username
     valread = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
     if (valread <= 0) {
         closesocket(client_socket);
@@ -65,6 +75,12 @@ void handleClient(int client_socket) {
     closesocket(client_socket);
 }
 
+/**
+ * @brief Starts the server, binds it to a port, and listens for incoming connections.
+ *
+ * The server runs indefinitely, accepting new client connections and
+ * spawning a new thread to handle each client.
+ */
 void startServer() {
     int server_fd, new_socket;
     struct sockaddr_in address;

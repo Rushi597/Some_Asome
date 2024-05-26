@@ -19,6 +19,13 @@
 #include <mutex>
 #include <algorithm>
 
+/**
+ * @brief Starts the server.
+ *
+ * This function initializes the server, binds it to a specific port,
+ * and listens for incoming client connections. Each client connection
+ * is handled in a separate thread.
+ */
 void startServer();
 
 #endif // SERVER_H
