@@ -30,10 +30,15 @@ void broadcastMessage(const std::string& message, int sender_socket) {
 void handleClient(int client_socket) {
     char buffer[1024];
     int valread;
+    std::string message_accumulator;
 
     valread = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
     if (valread <= 0) {
+        #ifdef _WIN32
         closesocket(client_socket);
+        #else
+        close(client_socket);
+        #endif
         return;
     }
     buffer[valread] = '\0';
@@ -48,20 +53,30 @@ void handleClient(int client_socket) {
     send(client_socket, welcome_message.c_str(), welcome_message.length(), 0);
     broadcastMessage(username + " has joined the chat.\n", client_socket);
 
-    while ((valread = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
+    while (true) {
+        valread = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
+        if (valread <= 0) {
+            break;
+        }
         buffer[valread] = '\0';
-        std::string message(buffer);
+        message_accumulator += std::string(buffer);
 
-        if (message.substr(0, 4) == "/msg") {
-            size_t pos = message.find(' ', 5);
-            if (pos != std::string::npos) {
-                std::string recipient = message.substr(5, pos - 5);
-                std::string private_msg = "[Private from " + username + "]: " + message.substr(pos + 1) + "\n";
-                broadcastMessage(private_msg, client_socket);
+        size_t pos;
+        while ((pos = message_accumulator.find('\n')) != std::string::npos) {
+            std::string complete_message = message_accumulator.substr(0, pos + 1);
+            message_accumulator.erase(0, pos + 1);
+
+            if (complete_message.substr(0, 4) == "/msg") {
+                size_t pos = complete_message.find(' ', 5);
+                if (pos != std::string::npos) {
+                    std::string recipient = complete_message.substr(5, pos - 5);
+                    std::string private_msg = "[Private from " + username + "]: " + complete_message.substr(pos + 1);
+                    broadcastMessage(private_msg, client_socket);
+                }
+            } else {
+                std::string broadcast_msg = username + ": " + complete_message;
+                broadcastMessage(broadcast_msg, client_socket);
             }
-        } else {
-            std::string broadcast_msg = username + ": " + message + "\n";
-            broadcastMessage(broadcast_msg, client_socket);
         }
     }
 
@@ -72,8 +87,13 @@ void handleClient(int client_socket) {
     }
 
     broadcastMessage(username + " has left the chat.\n", client_socket);
+    #ifdef _WIN32
     closesocket(client_socket);
+    #else
+    close(client_socket);
+    #endif
 }
+
 
 /**
  * @brief Starts the server, binds it to a port, and listens for incoming connections.
@@ -105,7 +125,11 @@ void startServer() {
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) != 0) {
         int err = errno;
         std::cerr << "setsockopt failed: " << strerror(err) << " (errno: " << err << ")" << std::endl;
+        #ifdef _WIN32
         closesocket(server_fd);
+        #else
+        close(server_fd);
+        #endif
         exit(EXIT_FAILURE);
     }
 
@@ -115,13 +139,21 @@ void startServer() {
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("bind failed");
+        #ifdef _WIN32
         closesocket(server_fd);
+        #else
+        close(server_fd);
+        #endif
         exit(EXIT_FAILURE);
     }
 
     if (listen(server_fd, 3) < 0) {
         perror("listen failed");
+        #ifdef _WIN32
         closesocket(server_fd);
+        #else
+        close(server_fd);
+        #endif
         exit(EXIT_FAILURE);
     }
 
@@ -131,7 +163,11 @@ void startServer() {
         new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         if (new_socket < 0) {
             perror("accept failed");
+            #ifdef _WIN32
             closesocket(server_fd);
+            #else
+            close(server_fd);
+            #endif
             exit(EXIT_FAILURE);
         }
 
@@ -144,7 +180,11 @@ void startServer() {
         }
     }
 
+    #ifdef _WIN32
     closesocket(server_fd);
+    #else
+    close(server_fd);
+    #endif
 
     #ifdef _WIN32
     WSACleanup();
